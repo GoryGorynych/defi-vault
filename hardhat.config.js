@@ -1,6 +1,7 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("hardhat-deploy");
 require("hardhat-contract-sizer");
+require("@openzeppelin/hardhat-upgrades");
 
 
 const ALCHEMY_API_KEY_MAINNET = process.env.ALCHEMY_API_KEY_MAINNET;
@@ -87,7 +88,7 @@ module.exports = {
         }
     },
     gasReporter: {
-        enabled: true,
+        enabled: false,
     },
     namedAccounts: {
         deployer: {
