@@ -10,37 +10,36 @@ describe("VaultFactory Contract", function () {
     beforeEach(async function () {
         [owner, user1, user2] = await ethers.getSigners();
 
-        // Деплоим TacoCoin (ERC20 с permit)
+        // Deploy TacoCoin (ERC20 with permit)
         TacoCoin = await ethers.getContractFactory("TacoCoin");
         tacoCoin = await TacoCoin.deploy(initAmout);
         await tacoCoin.waitForDeployment();
 
-        // Деплоим Vault
+        // Deploy Vault implementation
         Vault = await ethers.getContractFactory("Vault");
         vaultImplementation = await Vault.deploy();
         await vaultImplementation.waitForDeployment();
 
-         // Деплоим Relayer
-         Relayer = await ethers.getContractFactory("Relayer");
-         relayer = await Relayer.deploy("Taco-Vault");
-         await relayer.waitForDeployment();       
+        // Deploy Relayer
+        Relayer = await ethers.getContractFactory("Relayer");
+        relayer = await Relayer.deploy("Taco-Vault");
+        await relayer.waitForDeployment();       
 
-        // Деплоим VaultFactory
+        // Deploy VaultFactory
         VaultFactory = await ethers.getContractFactory("VaultFactory");
         vaultFactory = await VaultFactory.deploy(vaultImplementation, relayer);
         await vaultFactory.waitForDeployment();
     });
 
-    it("Должен развернуть фабрику с правильным адресом реализации Vault", async function () {
+    it("Should deploy the factory with the correct Vault implementation address", async function () {
         expect(await vaultFactory.vaultImplementation()).to.equal(vaultImplementation);
     });
 
-
-    it("Должен позволять пользователям создавать несколько Vault", async function () {
+    it("Should allow users to create multiple Vaults", async function () {
         const rewardRate1 = 3;
         const rewardRate2 = 7;
     
-        // Создание двух Vault для разных пользователей
+        // Create two Vaults for different users
         const tx1 = await vaultFactory.connect(user1).createVault(await tacoCoin.getAddress(), rewardRate1);
         const receipt1 = await tx1.wait();
         const newVaultAddress1 = receipt1.logs.find(log => log.eventName === "VaultCreated").args.newVault;
@@ -52,7 +51,7 @@ describe("VaultFactory Contract", function () {
         const vaults = await vaultFactory.getVaults();
         expect(vaults.length).to.equal(2);
     
-        // Получаем контракты Vault и проверяем rewardRatePerDay
+        // Get Vault contracts and check rewardRatePerDay
         const vault1 = await ethers.getContractAt("Vault", newVaultAddress1);
         const vault2 = await ethers.getContractAt("Vault", newVaultAddress2);
     
