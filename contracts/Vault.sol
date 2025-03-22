@@ -5,8 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./utils/ERC2771Simple.sol";
 
-contract Vault is UUPSUpgradeable, OwnableUpgradeable{
+
+contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
     IERC20 public tacoCoin;
     address public rewardDistributor;
     uint256 public rewardRatePerDay; // Процент наград в день
@@ -25,11 +27,20 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable{
     event Withdrawal(address indexed user, uint256 amount);
     event RewardsClaimed(address indexed user, uint256 amount);
 
-    function initialize(address _token, address initialOwner, uint256 _rewardRatePerDay) public initializer{
+    function initialize(address _token, address initialOwner, uint256 _rewardRatePerDay, address _trustedForwarder) public initializer{
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
+        __ERC2771Simple_init(_trustedForwarder);
         tacoCoin = IERC20(_token);
         rewardRatePerDay = _rewardRatePerDay;
+    }
+
+    function msgSender() internal view override returns (address sender) {
+        return ERC2771Simple.msgSender();
+    }
+
+    function msgData() internal view override returns (bytes calldata) {
+        return ERC2771Simple.msgData();
     }
 
     function _authorizeUpgrade(address) internal override onlyOwner {}
@@ -38,39 +49,42 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable{
         if (amount == 0) {
             revert ZeroAmount();
         }
+        address sender = msgSender();
 
-        IERC20Permit(address(tacoCoin)).permit(msg.sender, address(this), amount, deadline, v, r, s);
+        IERC20Permit(address(tacoCoin)).permit(sender, address(this), amount, deadline, v, r, s);
 
-        tacoCoin.transferFrom(msg.sender, address(this), amount);
+        tacoCoin.transferFrom(sender, address(this), amount);
 
-        deposits[msg.sender].amount = amount;
-        deposits[msg.sender].depositTime = block.timestamp;
+        deposits[sender].amount = amount;
+        deposits[sender].depositTime = block.timestamp;
 
-        emit Deposited(msg.sender, amount);
+        emit Deposited(sender, amount);
     }
 
     function withdraw(uint256 amount) external {
-        if (deposits[msg.sender].amount < amount) {
-            revert InsufficientBalance(msg.sender, deposits[msg.sender].amount, amount);
+        address sender = msgSender();
+        if (deposits[sender].amount < amount) {
+            revert InsufficientBalance(sender, deposits[sender].amount, amount);
         }
 
-        deposits[msg.sender].amount -= amount;
+        deposits[sender].amount -= amount;
 
-        tacoCoin.transfer(msg.sender, amount);
+        tacoCoin.transfer(sender, amount);
 
-        emit Withdrawal(msg.sender, amount);
+        emit Withdrawal(sender, amount);
     }
 
     function claimRewards() external {
+        address sender = msgSender();
         require(rewardDistributor != address(0), "Reward distributor not set");
-        uint256 rewardAmount = calculateRewards(msg.sender);
+        uint256 rewardAmount = calculateRewards(sender);
         require(rewardAmount > 0, "No rewards available");
         require(tacoCoin.balanceOf(address(this)) >= rewardAmount, "Insufficient rewards");
 
-        tacoCoin.transfer(msg.sender, rewardAmount);
-        deposits[msg.sender].depositTime = block.timestamp; // Обновляем время последнего получения награды
+        tacoCoin.transfer(sender, rewardAmount);
+        deposits[sender].depositTime = block.timestamp; // Обновляем время последнего получения награды
 
-        emit RewardsClaimed(msg.sender, rewardAmount);
+        emit RewardsClaimed(sender, rewardAmount);
     }
 
     function calculateRewards(address user) public view returns (uint256) {

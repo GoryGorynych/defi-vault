@@ -15,14 +15,19 @@ describe("VaultFactory Contract", function () {
         tacoCoin = await TacoCoin.deploy(initAmout);
         await tacoCoin.waitForDeployment();
 
-        // Деплоим Vault (UUPS Upgradeable)
+        // Деплоим Vault
         Vault = await ethers.getContractFactory("Vault");
         vaultImplementation = await Vault.deploy();
         await vaultImplementation.waitForDeployment();
 
+         // Деплоим Relayer
+         Relayer = await ethers.getContractFactory("Relayer");
+         relayer = await Relayer.deploy("Taco-Vault");
+         await relayer.waitForDeployment();       
+
         // Деплоим VaultFactory
         VaultFactory = await ethers.getContractFactory("VaultFactory");
-        vaultFactory = await VaultFactory.deploy(vaultImplementation);
+        vaultFactory = await VaultFactory.deploy(vaultImplementation, relayer);
         await vaultFactory.waitForDeployment();
     });
 
