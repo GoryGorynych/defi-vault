@@ -2,12 +2,13 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
 describe("Vault Contract", function () {
-    let Vault, vault, TacoCoin, tacoCoin, owner, user1;
+    let Vault, vault, TacoCoin, tacoCoin, owner, user1, user2, chainId;
     let initAmout = 100n * 10n ** 18n;
     let rewardRatePerDay = 1n;
 
     beforeEach(async function () {
-        [owner, user1] = await ethers.getSigners();
+        [owner, user1, user2] = await ethers.getSigners();
+        chainId = (await ethers.provider.getNetwork()).chainId;
 
         // Деплоим TacoCoin (ERC20 с permit)
         TacoCoin = await ethers.getContractFactory("TacoCoin");
@@ -21,15 +22,16 @@ describe("Vault Contract", function () {
 
         // Деплоим Vault (UUPS Upgradeable)
         Vault = await ethers.getContractFactory("Vault");
-        vault = await upgrades.deployProxy(Vault, [await tacoCoin.getAddress(), owner.address, rewardRatePerDay, await relayer.getAddress()], {
+        vault = await upgrades.deployProxy(Vault, 
+            [await tacoCoin.getAddress(), owner.address, rewardRatePerDay, await relayer.getAddress()], {
             initializer: "initialize",
+            kind: "uups"
         });
         await vault.waitForDeployment();
     });
 
     it("Проверка начальной инициализации", async function () {
         expect(await vault.tacoCoin()).to.equal(await tacoCoin.getAddress());
-        expect(await vault.owner()).to.equal(owner.address);
     });
 
     it("Депозит токенов через permit()", async function () {
@@ -75,115 +77,123 @@ describe("Vault Contract", function () {
          await ethers.provider.send("evm_revert", [snapshotId]);       
     });
 
-    it("Только владелец может обновлять контракт", async function () {
-        const NewVault = await ethers.getContractFactory("Vault");
-        await expect(
-            upgrades.upgradeProxy(await vault.getAddress(), NewVault.connect(user1))
-        ).to.be.revertedWithCustomError(NewVault, "OwnableUnauthorizedAccount");
-    });
-
     it ("Должен обновить имплементацию Vault", async function () {
         const NewVault = await ethers.getContractFactory("VaultV2");
         const upgradedVault = await upgrades.upgradeProxy(await vault.getAddress(), NewVault);
 
         expect(await upgradedVault.getVersion()).to.equal("V2");
     });
-});
 
-describe("Meta transactions", function () {
-    let Vault, vault, TacoCoin, tacoCoin, owner, user1, user2, chainId;
-    let initAmout = 100n * 10n ** 18n;
-    let rewardRatePerDay = 1n;
-
-    beforeEach(async function () {
-        [owner, user1, user2] = await ethers.getSigners();
-        chainId = (await ethers.provider.getNetwork()).chainId;
-
-        // Деплоим TacoCoin (ERC20 с permit)
-        TacoCoin = await ethers.getContractFactory("TacoCoin");
-        tacoCoin = await TacoCoin.deploy(initAmout);
-        await tacoCoin.waitForDeployment();
-
-        // Деплоим Relayer
-        Relayer = await ethers.getContractFactory("Relayer");
-        relayer = await Relayer.deploy("Taco-Vault");
-        await relayer.waitForDeployment();
-
-        // Деплоим Vault (UUPS Upgradeable)
-        Vault = await ethers.getContractFactory("Vault");
-        vault = await upgrades.deployProxy(Vault, [await tacoCoin.getAddress(), owner.address, rewardRatePerDay, await relayer.getAddress()], {
-            initializer: "initialize",
+    context("Meta transactions", function () {
+        it("Депозит токенов через мета транзакцию и Relayer", async function () {
+            vaultAddress = await vault.getAddress();
+            const relayerAddress = await relayer.getAddress();
+            const depositAmount = ethers.parseEther("10");
+    
+            // ==== 1. Генерируем permit-подпись ====
+    
+            // Mint токены пользователю
+            await tacoCoin.mint(user1.address, depositAmount);
+    
+            const deadline = Math.floor(Date.now() / 1000) + 3600; // плюс час
+    
+            // Подписываем транзакцию
+            const { v, r, s } = await preparePermitSignature(tacoCoin, user1, user1.address, vaultAddress, depositAmount, deadline);
+    
+            // ==== 2. Кодируем вызов deposit ====
+    
+            const data = vault.interface.encodeFunctionData("deposit", [depositAmount, deadline, v, r, s]);
+    
+            // ==== 3. Генерируем подпись под ForwardRequest (EIP-712) ====
+    
+            const forwarderDomain = {
+                name: "Taco-Vault",
+                version: "1",
+                chainId,
+                verifyingContract: relayerAddress
+            };
+    
+            const request = {
+                from: user1.address,
+                to: vaultAddress,
+                value: 0,
+                gas: 1_000_000,
+                nonce: await relayer.nonces(user1.address),
+                deadline: deadline,
+                data
+            };
+    
+    
+            const forwarderTypes = {
+                ForwardRequest: [
+                    { name: "from", type: "address" },
+                    { name: "to", type: "address" },
+                    { name: "value", type: "uint256" },
+                    { name: "gas", type: "uint256" },
+                    { name: "nonce", type: "uint256" },
+                    { name: "deadline", type: "uint48" },
+                    { name: "data", type: "bytes" },
+                ],
+            };
+    
+            const signature = await user1.signTypedData(forwarderDomain, forwarderTypes, request);
+    
+            // ==== 4. Выполняем мета транзакцию через Relayer ====
+    
+            request.signature = signature;
+            await expect(
+                relayer.connect(user2).execute(request)
+            ).to.emit(vault, "Deposited").withArgs(user1.address, depositAmount); // проверяем эвент
+    
+            // ==== 5. Проверяем, что депозит записался на юзера ====
+    
+            const deposit = await vault.deposits(user1.address);
+            expect(deposit.amount).to.equal(depositAmount);
+    
         });
-        await vault.waitForDeployment();
+    })
+
+    context("AccessControl", function () {
+        it("should assign DEFAULT_ADMIN_ROLE, REWARD_MANAGER_ROLE, and UPGRADER_ROLE to deployer", async () => {
+            const DEFAULT_ADMIN_ROLE = await vault.DEFAULT_ADMIN_ROLE();
+            const REWARD_MANAGER_ROLE = await vault.REWARD_MANAGER_ROLE();
+            const UPGRADER_ROLE = await vault.UPGRADER_ROLE();
+    
+            expect(await vault.hasRole(DEFAULT_ADMIN_ROLE, owner.address)).to.be.true;
+            expect(await vault.hasRole(REWARD_MANAGER_ROLE, owner.address)).to.be.true;
+            expect(await vault.hasRole(UPGRADER_ROLE, owner.address)).to.be.true;
+        });
+    
+        it("should allow REWARD_MANAGER_ROLE to set reward rate", async () => {
+            await expect(vault.setRewardRate(5))
+                .to.not.be.reverted;
+        });
+    
+        it("should not allow non-REWARD_MANAGER_ROLE to set reward rate", async () => {
+            await expect(
+                vault.connect(user1).setRewardRate(5)
+            ).to.be.revertedWithCustomError(vault, "AccessControlUnauthorizedAccount")
+                .withArgs(user1.address, await vault.REWARD_MANAGER_ROLE());
+        });
+    
+        it("should allow UPGRADER_ROLE to upgrade", async () => {
+            const NewVault = await ethers.getContractFactory("VaultV2");
+            await expect(upgrades.upgradeProxy(await vault.getAddress(), NewVault.connect(owner)))
+                .to.not.be.reverted;
+        });
+    
+        it("should not allow upgrade from non-UPGRADER_ROLE", async () => {
+            const NewVault = await ethers.getContractFactory("VaultV2");
+    
+            await expect(
+                upgrades.upgradeProxy(await vault.getAddress(), NewVault.connect(user1))
+            ).to.be.revertedWithCustomError(vault, "AccessControlUnauthorizedAccount")
+                .withArgs(user1.address, await vault.UPGRADER_ROLE());
+        });
     });
-
-    it("Депозит токенов через через мета транзакцию и Relayer", async function () {
-        vaultAddress = await vault.getAddress();
-        const relayerAddress = await relayer.getAddress();
-        const depositAmount = ethers.parseEther("10");
-
-        // ==== 1. Генерируем permit-подпись ====
-
-        // Mint токены пользователю
-        await tacoCoin.mint(user1.address, depositAmount);
-
-        const deadline = Math.floor(Date.now() / 1000) + 3600; // плюс час
-
-        // Подписываем транзакцию
-        const { v, r, s } = await preparePermitSignature(tacoCoin, user1, user1.address, vaultAddress, depositAmount, deadline);
-
-        // ==== 2. Кодируем вызов deposit ====
-
-        const data = vault.interface.encodeFunctionData("deposit", [depositAmount, deadline, v, r, s]);
-
-        // ==== 3. Генерируем подпись под ForwardRequest (EIP-712) ====
-
-        const forwarderDomain = {
-            name: "Taco-Vault",
-            version: "1",
-            chainId,
-            verifyingContract: relayerAddress
-        };
-
-        const request = {
-            from: user1.address,
-            to: vaultAddress,
-            value: 0,
-            gas: 1_000_000,
-            nonce: await relayer.nonces(user1.address),
-            deadline: deadline,
-            data
-        };
-
-
-        const forwarderTypes = {
-            ForwardRequest: [
-                { name: "from", type: "address" },
-                { name: "to", type: "address" },
-                { name: "value", type: "uint256" },
-                { name: "gas", type: "uint256" },
-                { name: "nonce", type: "uint256" },
-                { name: "deadline", type: "uint48" },
-                { name: "data", type: "bytes" },
-            ],
-        };
-
-        const signature = await user1.signTypedData(forwarderDomain, forwarderTypes, request);
-
-        // ==== 4. Выполняем мета транзакцию через Relayer ====
-
-        request.signature = signature;
-        await expect(
-            relayer.connect(user2).execute(request)
-        ).to.emit(vault, "Deposited").withArgs(user1.address, depositAmount); // проверяем эвент
-
-        // ==== 5. Проверяем, что депозит записался на юзера ====
-
-        const deposit = await vault.deposits(user1.address);
-        expect(deposit.amount).to.equal(depositAmount);
-
-    });
+    
 });
+
 
 async function depositTransaction(vault, vaultAddress, depositAmount, owner, tacoCoin) {
 

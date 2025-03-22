@@ -4,13 +4,12 @@ pragma solidity ^0.8.25;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "./utils/ERC2771Simple.sol";
 
 
-contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
+contract Vault is UUPSUpgradeable, AccessControlUpgradeable, ERC2771Simple {
     IERC20 public tacoCoin;
-    address public rewardDistributor;
     uint256 public rewardRatePerDay; // Процент наград в день
 
     struct Deposit {
@@ -20,6 +19,10 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
 
     mapping(address => Deposit) public deposits;
 
+    // --- Roles ---
+    bytes32 public constant REWARD_MANAGER_ROLE = keccak256("REWARD_MANAGER_ROLE");
+    bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+
     error ZeroAmount();
     error InsufficientBalance(address user, uint256 available, uint256 required);
 
@@ -28,11 +31,15 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
     event RewardsClaimed(address indexed user, uint256 amount);
 
     function initialize(address _token, address initialOwner, uint256 _rewardRatePerDay, address _trustedForwarder) public initializer{
-        __Ownable_init(initialOwner);
+        __AccessControl_init();
         __UUPSUpgradeable_init();
         __ERC2771Simple_init(_trustedForwarder);
         tacoCoin = IERC20(_token);
         rewardRatePerDay = _rewardRatePerDay;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
+        _grantRole(REWARD_MANAGER_ROLE, initialOwner);
+        _grantRole(UPGRADER_ROLE, initialOwner);
     }
 
     function msgSender() internal view override returns (address sender) {
@@ -43,7 +50,7 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
         return ERC2771Simple.msgData();
     }
 
-    function _authorizeUpgrade(address) internal override onlyOwner {}
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
     function deposit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
         if (amount == 0) {
@@ -76,7 +83,6 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
 
     function claimRewards() external {
         address sender = msgSender();
-        require(rewardDistributor != address(0), "Reward distributor not set");
         uint256 rewardAmount = calculateRewards(sender);
         require(rewardAmount > 0, "No rewards available");
         require(tacoCoin.balanceOf(address(this)) >= rewardAmount, "Insufficient rewards");
@@ -92,11 +98,11 @@ contract Vault is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
         return (deposits[user].amount * daysStaked * rewardRatePerDay) / 100;
     }
 
-    function setRewardRate(uint256 _newRate) external onlyOwner {
+    function setRewardRate(uint256 _newRate) external onlyRole(REWARD_MANAGER_ROLE) {
         rewardRatePerDay = _newRate;
     }
 
-    function withdrawUnusedRewards(address recipient, uint256 amount) external onlyOwner {
+    function withdrawUnusedRewards(address recipient, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(tacoCoin.balanceOf(address(this)) >= amount, "Insufficient balance");
         tacoCoin.transfer(recipient, amount);
     }

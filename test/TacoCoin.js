@@ -74,6 +74,81 @@ describe(contractName, function () {
                 .to.be.revertedWithCustomError(coinContract, "EIP2612PermisssionExpired");
         });
     })
+
+    context("AccessControl", function () {
+        it("Should grant DEFAULT_ADMIN_ROLE, MINTER_ROLE to deployer", async () => {
+            const DEFAULT_ADMIN_ROLE = await coinContract.DEFAULT_ADMIN_ROLE();
+            const MINTER_ROLE = await coinContract.MINTER_ROLE();
+    
+            expect(await coinContract.hasRole(DEFAULT_ADMIN_ROLE, owner.address)).to.be.true;
+            expect(await coinContract.hasRole(MINTER_ROLE, owner.address)).to.be.true;
+        });
+    
+        it("Should allow MINTER_ROLE to mint tokens", async () => {
+            const amountToMint = ethers.parseUnits("10", 18);
+            const initialBalance = await coinContract.balanceOf(spender.address);
+    
+            // mint by owner (has MINTER_ROLE)
+            await coinContract.mint(spender.address, amountToMint);
+    
+            const newBalance = await coinContract.balanceOf(spender.address);
+            expect(newBalance - initialBalance).to.equal(amountToMint);
+        });
+    
+        it("Should not allow minting without MINTER_ROLE", async () => {
+            const amountToMint = ethers.parseUnits("10", 18);
+            const MINTER_ROLE = await coinContract.MINTER_ROLE();
+        
+            await expect(
+                coinContract.connect(spender).mint(spender.address, amountToMint)
+            ).to.be.revertedWithCustomError(coinContract, "AccessControlUnauthorizedAccount")
+             .withArgs(spender.address, MINTER_ROLE);
+        });
+        
+    
+        it("Should allow BURNER_ROLE to burn tokens", async () => {
+            const amountToBurn = ethers.parseUnits("5", 18);
+    
+            // grant BURNER_ROLE to spender
+            const BURNER_ROLE = await coinContract.BURNER_ROLE();
+            await coinContract.grantRole(BURNER_ROLE, spender.address);
+    
+            // transfer some tokens to spender
+            await coinContract.transfer(spender.address, amountToBurn);
+    
+            const initialBalance = await coinContract.balanceOf(spender.address);
+            await coinContract.connect(spender).burn(spender.address, amountToBurn);
+            const finalBalance = await coinContract.balanceOf(spender.address);
+    
+            expect(initialBalance - finalBalance).to.equal(amountToBurn);
+        });
+    
+        it("Should not allow burning without BURNER_ROLE", async () => {
+            const amountToBurn = ethers.parseUnits("5", 18);
+            const BURNER_ROLE = await coinContract.BURNER_ROLE();
+        
+            await coinContract.transfer(spender.address, amountToBurn);
+        
+            await expect(
+                coinContract.connect(spender).burn(spender.address, amountToBurn)
+            ).to.be.revertedWithCustomError(coinContract, "AccessControlUnauthorizedAccount")
+             .withArgs(spender.address, BURNER_ROLE);
+        });
+        
+    
+        it("Should allow DEFAULT_ADMIN_ROLE to grant and revoke roles", async () => {
+            const BURNER_ROLE = await coinContract.BURNER_ROLE();
+    
+            // grant role
+            await coinContract.grantRole(BURNER_ROLE, spender.address);
+            expect(await coinContract.hasRole(BURNER_ROLE, spender.address)).to.be.true;
+    
+            // revoke role
+            await coinContract.revokeRole(BURNER_ROLE, spender.address);
+            expect(await coinContract.hasRole(BURNER_ROLE, spender.address)).to.be.false;
+        });
+    });
+    
 });
 
 async function preparePermitSignature(coinContract, owner, spender, amount, deadline) {

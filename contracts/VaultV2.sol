@@ -4,13 +4,12 @@ pragma solidity ^0.8.25;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "./utils/ERC2771Simple.sol";
 
 
-contract VaultV2 is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
+contract VaultV2 is UUPSUpgradeable, AccessControlUpgradeable, ERC2771Simple {
     IERC20 public tacoCoin;
-    address public rewardDistributor;
     uint256 public rewardRatePerDay; // Процент наград в день
 
     struct Deposit {
@@ -20,6 +19,11 @@ contract VaultV2 is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
 
     mapping(address => Deposit) public deposits;
 
+    // --- Roles ---
+    bytes32 public constant REWARD_MANAGER_ROLE = keccak256("REWARD_MANAGER_ROLE");
+    bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+
+
     error ZeroAmount();
     error InsufficientBalance(address user, uint256 available, uint256 required);
 
@@ -27,12 +31,16 @@ contract VaultV2 is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
     event Withdrawal(address indexed user, uint256 amount);
     event RewardsClaimed(address indexed user, uint256 amount);
 
-    function initialize(address _token, address initialOwner, uint256 _rewardRatePerDay) public initializer{
-        __Ownable_init(initialOwner);
+    function initialize(address _token, address initialOwner, uint256 _rewardRatePerDay, address _trustedForwarder) public initializer{
+        __AccessControl_init();
         __UUPSUpgradeable_init();
-        __ERC2771Simple_init(initialOwner);
+        __ERC2771Simple_init(_trustedForwarder);
         tacoCoin = IERC20(_token);
         rewardRatePerDay = _rewardRatePerDay;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
+        _grantRole(REWARD_MANAGER_ROLE, initialOwner);
+        _grantRole(UPGRADER_ROLE, initialOwner);
     }
 
     function getVersion() external pure returns (string memory) {
@@ -47,6 +55,6 @@ contract VaultV2 is UUPSUpgradeable, OwnableUpgradeable, ERC2771Simple {
         return ERC2771Simple.msgData();
     }
 
-    function _authorizeUpgrade(address) internal override onlyOwner {}
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
 }

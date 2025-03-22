@@ -3,12 +3,16 @@ pragma solidity ^0.8.25;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract TacoCoin is ERC20, IERC20Permit {
+contract TacoCoin is ERC20, IERC20Permit, AccessControl  {
     string public version;
 
     error EIP2612PermisssionExpired(uint256 deadline);
     error EIP2612InvalidSignature(address owner, address signer);
+
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
     bytes32 private constant DOMAIN_TYPE_HASH =
         keccak256(
@@ -29,11 +33,18 @@ contract TacoCoin is ERC20, IERC20Permit {
         INITIAL_CHAIN_ID = block.chainid;
         INITIAL_DOMAIN_SEPARATOR = computeDomainSeparator();
 
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+
         _mint(msg.sender, _initMintValue);
     }
 
-    function mint(address account, uint256 value) public virtual {
+    function mint(address account, uint256 value) public virtual onlyRole(MINTER_ROLE) {
         _mint(account, value);
+    }
+
+    function burn(address account, uint256 value) public virtual onlyRole(BURNER_ROLE) {
+        _burn(account, value);
     }
 
     function permit(
