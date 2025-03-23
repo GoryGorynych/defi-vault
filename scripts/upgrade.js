@@ -16,8 +16,8 @@ async function main() {
 
   console.log("Upgrading Vault implementation...");
 
-  const VaultV2 = await ethers.getContractFactory("VaultV2");
-  const upgraded = await upgrades.upgradeProxy(proxyAddress, VaultV2);
+  const VaultV3 = await ethers.getContractFactory("VaultV3");
+  const upgraded = await upgrades.upgradeProxy(proxyAddress, VaultV3);
 
   console.log("Vault upgraded at proxy:", await upgraded.getAddress());
 
@@ -26,10 +26,10 @@ async function main() {
 
   // Save new implementation info for verification
   deployed.VaultImpl = {
-    name: "VaultV2",
+    name: "VaultV3",
     address: newImplAddress,
     constructorArgs: [],
-    contractPath: "contracts/VaultV2.sol:VaultV2",
+    contractPath: "contracts/VaultV3.sol:VaultV3",
   };
 
   fs.writeFileSync(deployedPath, JSON.stringify(deployed, null, 2));

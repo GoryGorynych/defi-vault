@@ -15,10 +15,10 @@
     "contractPath": "contracts/Relayer.sol:Relayer"
   },
   "VaultImpl": {
-    "name": "VaultV2",
-    "address": "0x995B5D6F841EC90A94d640051E8d90f13FaFecDB",
+    "name": "VaultV3",
+    "address": "0xf0795FFB055825B2551e0B7b99A9C92CfE43d78b",
     "constructorArgs": [],
-    "contractPath": "contracts/VaultV2.sol:VaultV2"
+    "contractPath": "contracts/VaultV3.sol:VaultV3"
   },
   "VaultProxy": {
     "address": "0xf7682023A75D62de2eE65Cd8Ce30b658684Dd231"
