@@ -1,0 +1,26 @@
+{
+  "TacoCoin": {
+    "name": "TacoCoin",
+    "address": "0x0cbc0f9AEA138640fa5226DCF4f6A153061a1A29",
+    "constructorArgs": [
+      "100000000000000000000"
+    ]
+  },
+  "Relayer": {
+    "name": "Relayer",
+    "address": "0xB93a811DC5f98ae04fd2e85f5Da4B80Fc078feCb",
+    "constructorArgs": [
+      "Taco-Vault"
+    ],
+    "contractPath": "contracts/Relayer.sol:Relayer"
+  },
+  "VaultImpl": {
+    "name": "VaultV2",
+    "address": "0x995B5D6F841EC90A94d640051E8d90f13FaFecDB",
+    "constructorArgs": [],
+    "contractPath": "contracts/VaultV2.sol:VaultV2"
+  },
+  "VaultProxy": {
+    "address": "0xf7682023A75D62de2eE65Cd8Ce30b658684Dd231"
+  }
+}

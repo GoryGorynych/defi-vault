@@ -1,41 +1,44 @@
+const { run } = require("hardhat");
 const fs = require("fs");
-const { execSync } = require("child_process");
-const { network  } = require("hardhat");
 
-/**
- * Функция универсальная, данные для верификации читает из файла.
- */
-async function verify() {
-    const networkName = network.name;
+async function main() {
+  const filePath = "deployedAddresses.json";
+  if (!fs.existsSync(filePath)) {
+    throw new Error("deployedAddresses.json not found. Run deploy script first.");
+  }
 
-    if (!fs.existsSync("scripts/deployment.json")) {
-        console.error("Error: deployment.json not found. Run `npm run deploy` first.");
-        process.exit(1);
+  const deployed = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+  const verifyContract = async (name, { address, constructorArgs, contractPath }) => {
+    console.log(`Verifying ${name} at ${address}...`);
+    const verifyParams = {
+      address,
+      constructorArguments: constructorArgs || [],
+    };
+
+    if (contractPath) {
+      verifyParams.contract = contractPath;
     }
 
-    const deploymentData = JSON.parse(fs.readFileSync("scripts/deployment.json"));
-    const { contractAddress, ...argsObject } = deploymentData;
-    const args = Object.values(argsObject).map(arg =>
-        typeof arg === "string" ? `"${arg}"` : arg
-    );
-    console.log("Args: " + args.join(" "));
-
-    console.log(`Verifying contract: ${contractAddress} in ${networkName} network`);
     try {
-        let command = `npx hardhat verify --network ${networkName} ${contractAddress} ${args.join(" ")}`;
-        execSync(
-            command,
-            { stdio: "inherit" }
-        );
-        console.log("Contract verified successfully!");
-    } catch (error) {
-        console.error("Verification failed:", error);
+      await run("verify:verify", verifyParams);
+      console.log(`Verified: ${name}\n`);
+    } catch (err) {
+      if (err.message.toLowerCase().includes("already verified")) {
+        console.log(`Already verified: ${name}\n`);
+      } else {
+        console.error(`Failed to verify ${name}:`, err.message);
+      }
     }
+  };
+
+  for (const [name, data] of Object.entries(deployed)) {
+    if (name === "VaultProxy") continue; // skip proxy
+    await verifyContract(name, data);
+  }
 }
 
-verify()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        console.error(error);
-        process.exit(1);
-    });
+main().catch((error) => {
+  console.error("Verification script failed:", error);
+  process.exit(1);
+});
