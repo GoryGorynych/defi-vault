@@ -32,7 +32,7 @@ describe("VaultFactory Contract", function () {
     });
 
     it("Should deploy the factory with the correct Vault implementation address", async function () {
-        expect(await vaultFactory.vaultImplementation()).to.equal(vaultImplementation);
+        expect(await vaultFactory.VAULT_IMPLEMENTATION()).to.equal(vaultImplementation);
     });
 
     it("Should allow users to create multiple Vaults", async function () {

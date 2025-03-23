@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "@openzeppelin/contracts/proxy/Clones.sol";
-import "./Vault.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {Vault} from "./Vault.sol";
 
 /// @title VaultFactory - Factory contract for creating minimal proxy instances of the Vault contract
 /// @notice Allows creation of lightweight upgradeable Vaults using the EIP-1167 clone pattern
 /// @author Vladimir Gorenkov
 contract VaultFactory {
-    address public immutable vaultImplementation;
-    address public immutable trustedForwarder;
+    address public immutable VAULT_IMPLEMENTATION;
+    address public immutable TRUSTED_FORWARDER;
     address[] public allVaults;
 
     event VaultCreated(address indexed newVault, address indexed owner, address tacoCoin, uint256 rewardRate);
@@ -19,8 +19,8 @@ contract VaultFactory {
     /// @param _trustedForwarder Address of the trusted forwarder for meta-transactions
     constructor(address _vaultImplementation, address _trustedForwarder) {
         require(_vaultImplementation != address(0), "Invalid implementation");
-        vaultImplementation = _vaultImplementation;
-        trustedForwarder = _trustedForwarder;
+        VAULT_IMPLEMENTATION = _vaultImplementation;
+        TRUSTED_FORWARDER = _trustedForwarder;
     }
 
     /// @notice Creates a new Vault clone and initializes it
@@ -28,8 +28,8 @@ contract VaultFactory {
     /// @param rewardRate Daily reward rate for the vault
     /// @return Address of the newly created Vault instance
     function createVault(address tacoCoin, uint256 rewardRate) external returns (address) {
-        address newVault = Clones.clone(vaultImplementation);
-        Vault(newVault).initialize(tacoCoin, msg.sender, rewardRate, trustedForwarder);
+        address newVault = Clones.clone(VAULT_IMPLEMENTATION);
+        Vault(newVault).initialize(tacoCoin, msg.sender, rewardRate, TRUSTED_FORWARDER);
 
         allVaults.push(newVault);
         emit VaultCreated(newVault, msg.sender, tacoCoin, rewardRate);

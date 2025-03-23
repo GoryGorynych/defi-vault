@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "@openzeppelin/contracts/metatx/ERC2771Forwarder.sol";
+import {ERC2771Forwarder} from "@openzeppelin/contracts/metatx/ERC2771Forwarder.sol";
 
 /// @title Relayer - Minimal ERC2771 forwarder for meta-transactions
 /// @notice Extends OpenZeppelin's ERC2771Forwarder to support trusted meta-transaction forwarding

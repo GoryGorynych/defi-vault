@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import "./utils/ERC2771Simple.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {ERC2771Simple} from "./utils/ERC2771Simple.sol";
 
 /// @title Vault - A staking vault contract with meta-transactions, upgradability, and reward distribution
 /// @notice Users can deposit tokens using EIP-2612 permits and claim daily rewards based on staking time
@@ -107,8 +107,8 @@ contract Vault is UUPSUpgradeable, AccessControlUpgradeable, ERC2771Simple {
         require(rewardAmount > 0, "No rewards available");
         require(tacoCoin.balanceOf(address(this)) >= rewardAmount, "Insufficient rewards");
 
-        tacoCoin.transfer(sender, rewardAmount);
         deposits[sender].depositTime = block.timestamp;
+        tacoCoin.transfer(sender, rewardAmount);
 
         emit RewardsClaimed(sender, rewardAmount);
     }
