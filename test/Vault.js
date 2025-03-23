@@ -2,7 +2,8 @@ const { expect } = require("chai");
 const { ethers, upgrades } = require("hardhat");
 
 describe("Vault Contract", function () {
-    let Vault, vault, TacoCoin, tacoCoin, owner, user1, user2, chainId;
+    let Vault, vault, TacoCoin, tacoCoin, owner, user1, user2, chainId, vaultAddress;
+    let Relayer, relayer;
     let initAmout = 100n * 10n ** 18n;
     let rewardRatePerDay = 1n;
 
@@ -24,10 +25,11 @@ describe("Vault Contract", function () {
         Vault = await ethers.getContractFactory("Vault");
         vault = await upgrades.deployProxy(Vault, 
             [await tacoCoin.getAddress(), owner.address, rewardRatePerDay, await relayer.getAddress()], {
-            initializer: "initialize",
-            kind: "uups"
-        });
+                initializer: "initialize",
+                kind: "uups"
+            });
         await vault.waitForDeployment();
+        vaultAddress = await vault.getAddress();
     });
 
     it("Should initialize properly", async function () {
@@ -35,7 +37,6 @@ describe("Vault Contract", function () {
     });
 
     it("Should deposit tokens via permit()", async function () {
-        vaultAddress = await vault.getAddress();
         const depositAmount = ethers.parseEther("10");
 
         await depositTransaction(vault, vaultAddress, depositAmount, user1, tacoCoin);
@@ -47,7 +48,6 @@ describe("Vault Contract", function () {
     });
 
     it("Should withdraw tokens", async function () {
-        vaultAddress = await vault.getAddress();
         const depositAmount = ethers.parseEther("5");
 
         await depositTransaction(vault, vaultAddress, depositAmount, user1, tacoCoin);
@@ -58,7 +58,6 @@ describe("Vault Contract", function () {
     });
 
     it("Should correctly calculate rewards", async function () {
-        const vaultAddress = await vault.getAddress();
         const depositAmount = ethers.parseEther("10");
 
         await depositTransaction(vault, vaultAddress, depositAmount, user1, tacoCoin);
@@ -86,7 +85,6 @@ describe("Vault Contract", function () {
 
     context("Meta transactions", function () {
         it("Should deposit tokens using a meta-transaction via Relayer", async function () {
-            vaultAddress = await vault.getAddress();
             const relayerAddress = await relayer.getAddress();
             const depositAmount = ethers.parseEther("10");
 

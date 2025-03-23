@@ -1,4 +1,5 @@
 const { expect } = require("chai");
+const { ethers } = require("hardhat");
 
 const contractName = "TacoCoin";
 
@@ -40,7 +41,7 @@ describe(contractName, function () {
             const amount = ethers.parseUnits("1", 4); // 1 token with 4 decimals
 
             // Generate a valid EIP-2612 permit signature
-            const { v, r, s } = await preparePermitSignature(coinContract, owner, spender, amount, deadline)
+            const { v, r, s } = await preparePermitSignature(coinContract, owner, spender, amount, deadline);
 
             // Spender submits permit to gain approval
             const tx = await coinContract.connect(spender)
@@ -65,7 +66,7 @@ describe(contractName, function () {
             const amount = ethers.parseUnits("1", 4);
 
             // Signature signed by a wrong account (spender2 instead of owner)
-            const { v, r, s } = await preparePermitSignature(coinContract, spender2, spender, amount, deadline)
+            const { v, r, s } = await preparePermitSignature(coinContract, spender2, spender, amount, deadline);
 
             await expect(
                 coinContract.connect(spender)
@@ -78,7 +79,7 @@ describe(contractName, function () {
 
             // Deadline is in the past
             const expiredDeadline = Math.floor(Date.now() / 1000) - 100;
-            const { v, r, s } = await preparePermitSignature(coinContract, owner, spender, amount, expiredDeadline)
+            const { v, r, s } = await preparePermitSignature(coinContract, owner, spender, amount, expiredDeadline);
 
             await expect(
                 coinContract.connect(spender)
@@ -116,7 +117,7 @@ describe(contractName, function () {
             await expect(
                 coinContract.connect(spender).mint(spender.address, amountToMint)
             ).to.be.revertedWithCustomError(coinContract, "AccessControlUnauthorizedAccount")
-             .withArgs(spender.address, MINTER_ROLE);
+                .withArgs(spender.address, MINTER_ROLE);
         });
 
         it("Should allow BURNER_ROLE to burn tokens", async () => {
@@ -148,7 +149,7 @@ describe(contractName, function () {
             await expect(
                 coinContract.connect(spender).burn(spender.address, amountToBurn)
             ).to.be.revertedWithCustomError(coinContract, "AccessControlUnauthorizedAccount")
-             .withArgs(spender.address, BURNER_ROLE);
+                .withArgs(spender.address, BURNER_ROLE);
         });
 
         it("Should allow DEFAULT_ADMIN_ROLE to grant and revoke roles", async () => {

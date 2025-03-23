@@ -1,5 +1,5 @@
 const { expect } = require("chai");
-const { ethers, upgrades } = require("hardhat");
+const { ethers } = require("hardhat");
 
 describe("VaultFactory Contract", function () {
     let Vault, vaultImplementation, VaultFactory, vaultFactory;
@@ -21,8 +21,8 @@ describe("VaultFactory Contract", function () {
         await vaultImplementation.waitForDeployment();
 
         // Deploy Relayer
-        Relayer = await ethers.getContractFactory("Relayer");
-        relayer = await Relayer.deploy("Taco-Vault");
+        const Relayer = await ethers.getContractFactory("Relayer");
+        const relayer = await Relayer.deploy("Taco-Vault");
         await relayer.waitForDeployment();       
 
         // Deploy VaultFactory

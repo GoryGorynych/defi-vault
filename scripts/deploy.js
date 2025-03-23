@@ -1,5 +1,5 @@
 const fs = require("fs");
-const { ethers, network  } = require("hardhat");
+const { ethers, network } = require("hardhat");
 
 // ************ Сonfiguration block ************ //
 
@@ -18,6 +18,30 @@ const deployerIdx = 1;
 
 // ******************************************* //
 
+// async function deployVault() {
+//     [owner, user1, user2] = await ethers.getSigners();
+//     chainId = (await ethers.provider.getNetwork()).chainId;
+
+//     // Deploy TacoCoin (ERC20 with permit)
+//     TacoCoin = await ethers.getContractFactory("TacoCoin");
+//     tacoCoin = await TacoCoin.deploy(initAmout);
+//     await tacoCoin.waitForDeployment();
+
+//     // Deploy Relayer
+//     Relayer = await ethers.getContractFactory("Relayer");
+//     relayer = await Relayer.deploy("Taco-Vault");
+//     await relayer.waitForDeployment();
+
+//     // Deploy Vault (UUPS Upgradeable)
+//     Vault = await ethers.getContractFactory("Vault");
+//     vault = await upgrades.deployProxy(Vault,
+//         [await tacoCoin.getAddress(), owner.address, rewardRatePerDay, await relayer.getAddress()], {
+//         initializer: "initialize",
+//         kind: "uups"
+//     });
+//     await vault.waitForDeployment();
+
+// }
 
 /**
  * Функция универсальная, не требуется изменять данные для деплоя.
@@ -47,7 +71,7 @@ async function deploy() {
         contractAddress,
         ...Object.fromEntries(args.map((value, index) => [`arg${index + 1}`, value]))
     };
-    
+
     fs.writeFileSync("scripts/deployment.json", JSON.stringify(deploymentData, null, 2));
     console.log("Deployment data saved to deployment.json");
 
